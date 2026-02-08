@@ -108,7 +108,7 @@ function KanbanColumn({ stage, opportunities }: { stage: PipelineStage; opportun
         <div
             ref={setNodeRef}
             className={cn(
-                'flex h-full w-72 shrink-0 flex-col rounded-xl border bg-muted/30 transition-colors',
+                'flex h-full min-w-0 flex-1 flex-col rounded-xl border bg-muted/30 transition-colors',
                 isOver ? 'border-primary/50 bg-primary/5' : 'border-border'
             )}
         >
@@ -124,7 +124,7 @@ function KanbanColumn({ stage, opportunities }: { stage: PipelineStage; opportun
                     </div>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                    {formatCurrency(totalValue)} · {stage.close_probability}% prob.
+                    {formatCurrency(totalValue)}
                 </p>
             </div>
 
@@ -166,7 +166,7 @@ export function PipelinePage() {
         }
         for (const opp of oppsData?.data ?? []) {
             if (opp.stage_id && map[opp.stage_id]) {
-                map[opp.stage_id].push(opp)
+                map[opp.stage_id]!.push(opp)
             }
         }
         return map
@@ -212,9 +212,9 @@ export function PipelinePage() {
 
             {/* Kanban Board */}
             {isLoading ? (
-                <div className="flex flex-1 gap-4 overflow-x-auto pb-4">
-                    {Array.from({ length: 7 }).map((_, i) => (
-                        <div key={i} className="h-full w-72 shrink-0 animate-pulse rounded-xl bg-muted/50" />
+                <div className="flex flex-1 gap-3 pb-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="h-full min-w-0 flex-1 animate-pulse rounded-xl bg-muted/50" />
                     ))}
                 </div>
             ) : (
@@ -224,7 +224,7 @@ export function PipelinePage() {
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                 >
-                    <div className="flex flex-1 gap-4 overflow-x-auto pb-4">
+                    <div className="flex flex-1 gap-3 pb-4">
                         {(stages ?? []).map((stage) => (
                             <KanbanColumn
                                 key={stage.id}
@@ -236,7 +236,7 @@ export function PipelinePage() {
 
                     <DragOverlay>
                         {activeOpp ? (
-                            <div className="w-72">
+                            <div className="w-64">
                                 <KanbanCard opportunity={activeOpp} isDragging />
                             </div>
                         ) : null}
