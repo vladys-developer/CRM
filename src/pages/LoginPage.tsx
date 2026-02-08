@@ -1,10 +1,15 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, EyeOff, Sparkles, ArrowRight, Mail, Lock, User as UserIcon } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
 export function LoginPage() {
+    // In dev mode, skip login entirely
+    if (import.meta.env.DEV) {
+        return <Navigate to="/" replace />
+    }
+
     const [isLogin, setIsLogin] = useState(true)
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')

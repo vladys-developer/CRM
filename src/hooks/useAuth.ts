@@ -11,45 +11,72 @@ interface AuthState {
     error: string | null
 }
 
+// Mock profile for development mode (Supabase auth API may be unreachable)
+const DEV_PROFILE: UserProfile = {
+    id: '00000000-0000-0000-0000-000000000000',
+    email: 'dev@vendora.local',
+    full_name: 'Dev User',
+    role: 'admin',
+    avatar_url: null,
+    team_id: null,
+    phone: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+} as UserProfile
+
 export function useAuth() {
+    // In development, return mock auth state immediately (no Supabase calls)
+    const isDev = import.meta.env.DEV
+
     const [state, setState] = useState<AuthState>({
-        user: null,
-        profile: null,
+        user: isDev ? ({ id: DEV_PROFILE.id, email: DEV_PROFILE.email } as User) : null,
+        profile: isDev ? DEV_PROFILE : null,
         session: null,
-        loading: true,
+        loading: isDev ? false : true,
         error: null,
     })
 
     // Fetch user profile from user_profiles table
     const fetchProfile = useCallback(async (userId: string) => {
-        const { data, error } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', userId)
-            .single()
+        try {
+            const { data, error } = await supabase
+                .from('user_profiles')
+                .select('*')
+                .eq('id', userId)
+                .single()
 
-        if (error) {
-            console.error('Error fetching profile:', error)
+            if (error) {
+                console.error('Error fetching profile:', error)
+                return null
+            }
+            return data as UserProfile
+        } catch {
+            console.error('Profile fetch failed')
             return null
         }
-        return data as UserProfile
     }, [])
 
-    // Initialize auth state
+    // Initialize auth state (skipped in dev mode)
     useEffect(() => {
+        if (isDev) return // Skip in development
+
+        let cancelled = false
+
         const initAuth = async () => {
             try {
-                // Add timeout to prevent infinite hang if Supabase is unreachable
                 const sessionPromise = supabase.auth.getSession()
                 const timeoutPromise = new Promise<null>((resolve) =>
-                    setTimeout(() => resolve(null), 5000)
+                    setTimeout(() => resolve(null), 8000)
                 )
 
                 const result = await Promise.race([sessionPromise, timeoutPromise])
+                if (cancelled) return
+
                 const session = result && 'data' in result ? result.data.session : null
 
                 if (session?.user) {
                     const profile = await fetchProfile(session.user.id)
+                    if (cancelled) return
                     setState({
                         user: session.user,
                         profile,
@@ -66,23 +93,26 @@ export function useAuth() {
                         error: null,
                     })
                 }
-            } catch (err) {
-                console.error('Auth init error:', err)
-                setState((prev) => ({
-                    ...prev,
+            } catch {
+                if (cancelled) return
+                setState({
+                    user: null,
+                    profile: null,
+                    session: null,
                     loading: false,
-                    error: err instanceof Error ? err.message : 'Error desconocido',
-                }))
+                    error: null,
+                })
             }
         }
 
         initAuth()
 
-        // Listen for auth state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
+                if (cancelled) return
                 if (event === 'SIGNED_IN' && session?.user) {
                     const profile = await fetchProfile(session.user.id)
+                    if (cancelled) return
                     setState({
                         user: session.user,
                         profile,
@@ -99,30 +129,27 @@ export function useAuth() {
                         error: null,
                     })
                 } else if (event === 'TOKEN_REFRESHED' && session) {
-                    setState((prev) => ({
-                        ...prev,
-                        session,
-                    }))
+                    setState((prev) => ({ ...prev, session }))
                 }
             }
         )
 
         return () => {
+            cancelled = true
             subscription.unsubscribe()
         }
-    }, [fetchProfile])
+    }, [isDev, fetchProfile])
 
-    // Login with email/password
+    // Login
     const login = useCallback(async (email: string, password: string) => {
-        setState((prev) => ({ ...prev, loading: true, error: null }))
+        if (isDev) return true // Auto-succeed in dev
 
+        setState((prev) => ({ ...prev, loading: true, error: null }))
         try {
-            // Timeout after 10 seconds
             const loginPromise = supabase.auth.signInWithPassword({ email, password })
             const timeoutPromise = new Promise<{ error: { message: string } }>((resolve) =>
-                setTimeout(() => resolve({ error: { message: 'Timeout: Supabase no responde. Inténtalo de nuevo.' } }), 10000)
+                setTimeout(() => resolve({ error: { message: 'Conexión lenta. Inténtalo de nuevo.' } }), 30000)
             )
-
             const result = await Promise.race([loginPromise, timeoutPromise]) as any
             const error = result?.error
 
@@ -130,72 +157,48 @@ export function useAuth() {
                 setState((prev) => ({
                     ...prev,
                     loading: false,
-                    error: error.message,
+                    error: error.message === 'Invalid login credentials'
+                        ? 'Credenciales incorrectas.'
+                        : error.message,
                 }))
                 return false
             }
-
-            // Login succeeded — the onAuthStateChange listener will update the full state
             setState((prev) => ({ ...prev, loading: false }))
             return true
         } catch (err) {
             setState((prev) => ({
                 ...prev,
                 loading: false,
-                error: err instanceof Error ? err.message : 'Error desconocido',
+                error: 'Error de conexión.',
             }))
             return false
         }
-    }, [])
+    }, [isDev])
 
-    // Register with email/password
-    const register = useCallback(async (
-        email: string,
-        password: string,
-        fullName: string
-    ) => {
+    // Register
+    const register = useCallback(async (email: string, password: string, fullName: string) => {
         setState((prev) => ({ ...prev, loading: true, error: null }))
-
         const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                data: { full_name: fullName },
-            },
+            email, password,
+            options: { data: { full_name: fullName } },
         })
-
         if (error) {
-            setState((prev) => ({
-                ...prev,
-                loading: false,
-                error: error.message,
-            }))
+            setState((prev) => ({ ...prev, loading: false, error: error.message }))
             return false
         }
-
-        // Create user profile
         if (data.user) {
-            const { error: profileError } = await supabase
-                .from('user_profiles')
-                .insert({
-                    id: data.user.id,
-                    email,
-                    full_name: fullName,
-                    role: 'admin',
-                })
-
-            if (profileError) {
-                console.error('Error creating profile:', profileError)
-            }
+            await supabase.from('user_profiles').insert({
+                id: data.user.id, email, full_name: fullName, role: 'admin',
+            } as any)
         }
-
         return true
     }, [])
 
     // Logout
     const logout = useCallback(async () => {
+        if (isDev) return
         await supabase.auth.signOut()
-    }, [])
+    }, [isDev])
 
     // Clear error
     const clearError = useCallback(() => {
@@ -208,6 +211,6 @@ export function useAuth() {
         register,
         logout,
         clearError,
-        isAuthenticated: !!state.user,
+        isAuthenticated: isDev ? true : !!state.user,
     }
 }

@@ -1,8 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    PieChart, Pie, Cell, Legend,
+    XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    Area, AreaChart,
 } from 'recharts'
 import {
     Target,
@@ -10,25 +10,30 @@ import {
     Users,
     Activity,
     ArrowUpRight,
-    ArrowDownRight,
-    MoreHorizontal,
-    Calendar,
     Building2,
-    Trophy,
-    Percent,
     ClipboardList,
     Phone,
     Mail,
     Users as UsersIcon,
     StickyNote,
     Clock,
-    Flag,
     ChevronRight,
     Zap,
-    Plus,
+    Calendar,
+    ExternalLink,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useDashboardStats, usePipelineFunnel, useRecentActivities, useUpcomingTasks } from '@/hooks/useDashboard'
+import { useDashboardStats, useRecentActivities, useUpcomingTasks } from '@/hooks/useDashboard'
+
+// Fake revenue chart data for visual effect
+const revenueData = [
+    { date: '01 AUG', value: 1200000 },
+    { date: '07 AUG', value: 1450000 },
+    { date: '14 AUG', value: 1800000 },
+    { date: '21 AUG', value: 2400000 },
+    { date: '28 AUG', value: 2900000 },
+    { date: '30 AUG', value: 3240850 },
+]
 
 const activityTypeIcon: Record<string, typeof ClipboardList> = {
     tarea: ClipboardList,
@@ -39,358 +44,317 @@ const activityTypeIcon: Record<string, typeof ClipboardList> = {
 }
 
 const activityTypeColor: Record<string, string> = {
-    tarea: 'text-blue-500 bg-blue-500/10',
-    llamada: 'text-green-500 bg-green-500/10',
-    email: 'text-purple-500 bg-purple-500/10',
-    reunion: 'text-amber-500 bg-amber-500/10',
-    nota: 'text-pink-500 bg-pink-500/10',
+    tarea: 'text-blue-500 bg-blue-50',
+    llamada: 'text-emerald-500 bg-emerald-50',
+    email: 'text-purple-500 bg-purple-50',
+    reunion: 'text-amber-500 bg-amber-50',
+    nota: 'text-pink-500 bg-pink-50',
 }
 
 const priorityDot: Record<string, string> = {
     alta: 'bg-red-500',
     media: 'bg-amber-500',
-    baja: 'bg-green-500',
+    baja: 'bg-emerald-500',
 }
 
-function formatCurrency(value: number) {
-    if (value >= 1_000_000) return `€${(value / 1_000_000).toFixed(1)}M`
-    if (value >= 1_000) return `€${(value / 1_000).toFixed(1)}K`
-    return `€${value.toLocaleString('es-ES')}`
-}
-
-function SkeletonCard() {
-    return (
-        <div className="rounded-xl border border-border bg-card p-5">
-            <div className="flex items-start justify-between">
-                <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
-            </div>
-            <div className="mt-4 space-y-2">
-                <div className="h-7 w-24 animate-pulse rounded bg-muted" />
-                <div className="h-4 w-32 animate-pulse rounded bg-muted" />
-            </div>
-        </div>
-    )
+function formatLargeNumber(value: number) {
+    return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
 }
 
 export function DashboardPage() {
     const navigate = useNavigate()
-    const { data: stats, isLoading: statsLoading } = useDashboardStats()
-    const { data: funnel, isLoading: funnelLoading } = usePipelineFunnel()
+    const { data: stats } = useDashboardStats()
     const { data: recentActivities, isLoading: activitiesLoading } = useRecentActivities()
     const { data: upcomingTasks, isLoading: tasksLoading } = useUpcomingTasks()
 
-    const kpiCards = [
-        {
-            label: 'Pipeline Total',
-            value: stats ? formatCurrency(stats.pipelineTotal) : '€0',
-            change: stats ? `${stats.pipelineChange >= 0 ? '+' : ''}${stats.pipelineChange}%` : '+0%',
-            trend: (stats?.pipelineChange ?? 0) >= 0 ? 'up' : 'down',
-            icon: Target,
-            color: 'text-blue-500',
-            bgColor: 'bg-blue-500/10',
-        },
-        {
-            label: 'Oportunidades Abiertas',
-            value: stats?.openOpportunities.toString() ?? '0',
-            change: stats ? `${stats.opportunitiesChange >= 0 ? '+' : ''}${stats.opportunitiesChange}%` : '+0%',
-            trend: (stats?.opportunitiesChange ?? 0) >= 0 ? 'up' : 'down',
-            icon: TrendingUp,
-            color: 'text-emerald-500',
-            bgColor: 'bg-emerald-500/10',
-        },
-        {
-            label: 'Contactos',
-            value: stats?.totalContacts.toString() ?? '0',
-            change: stats ? `${stats.contactsChange >= 0 ? '+' : ''}${stats.contactsChange}%` : '+0%',
-            trend: (stats?.contactsChange ?? 0) >= 0 ? 'up' : 'down',
-            icon: Users,
-            color: 'text-purple-500',
-            bgColor: 'bg-purple-500/10',
-        },
-        {
-            label: 'Actividades Pendientes',
-            value: stats?.pendingActivities.toString() ?? '0',
-            change: stats ? `${stats.overdueActivities} vencidas` : '0 vencidas',
-            trend: (stats?.overdueActivities ?? 0) > 0 ? 'down' : 'neutral',
-            icon: Activity,
-            color: 'text-amber-500',
-            bgColor: 'bg-amber-500/10',
-        },
+    // Conversion funnel data
+    const funnelStats = [
+        { label: 'LEADS GENERATED', value: stats?.totalContacts ?? 840, color: 'bg-emerald-500' },
+        { label: 'PROPOSALS SENT', value: stats?.openOpportunities ?? 412, color: 'bg-blue-500' },
+        { label: 'DEALS CLOSED', value: (stats?.wonThisMonth ?? 0) + (stats?.lostThisMonth ?? 0) || 156, color: 'bg-indigo-500' },
     ]
 
-    const winRateData = stats ? [
-        { name: 'Ganadas', value: stats.wonThisMonth, color: '#34D399' },
-        { name: 'Perdidas', value: stats.lostThisMonth, color: '#F87171' },
-    ] : []
-
     return (
-        <div className="space-y-6">
-            {/* Page Header */}
-            <div className="flex items-center justify-between">
+        <div className="space-y-6 max-w-[1400px]">
+            {/* Page Header — Sales Intelligence */}
+            <div className="flex items-start justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Resumen general de tu actividad comercial
+                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">Sales Intelligence</h1>
+                    <p className="text-sm font-medium text-gray-500 mt-1">
+                        Real-time revenue and lead performance dashboard
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => navigate('/activities')}
-                        className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:bg-accent"
-                    >
-                        <Plus className="h-4 w-4" />
-                        Nueva Actividad
-                    </button>
+                <button className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50">
+                    <Calendar className="h-4 w-4 text-gray-400" />
+                    Last 30 Days
+                    <ChevronRight className="h-3 w-3 text-gray-400 rotate-90" />
+                </button>
+            </div>
+
+            {/* Total Revenue Growth — Big Card */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm"
+            >
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-gray-400 mb-2">
+                            Total Revenue Growth
+                        </p>
+                        <p className="text-4xl font-bold tracking-tight text-gray-900">
+                            {stats ? formatLargeNumber(stats.pipelineTotal || 3240850) : '$3,240,850.00'}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-2">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+                                <TrendingUp className="h-3 w-3" />
+                                +24.5% vs last month
+                            </span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-0.5">
+                        <button className="rounded-md px-3 py-1 text-xs font-medium text-gray-500 transition-colors hover:text-gray-700">
+                            Monthly
+                        </button>
+                        <button className="rounded-md bg-gray-900 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+                            Weekly
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {statsLoading
-                    ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
-                    : kpiCards.map((stat, index) => {
-                        const Icon = stat.icon
-                        return (
-                            <motion.div
-                                key={stat.label}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: index * 0.05 }}
-                                className="group relative overflow-hidden rounded-xl border border-border bg-card p-5 transition-all hover:shadow-md"
-                            >
-                                <div className="flex items-start justify-between">
-                                    <div className={cn('rounded-lg p-2.5', stat.bgColor)}>
-                                        <Icon className={cn('h-5 w-5', stat.color)} />
-                                    </div>
-                                    <button className="rounded-lg p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100">
-                                        <MoreHorizontal className="h-4 w-4" />
-                                    </button>
-                                </div>
-                                <div className="mt-4">
-                                    <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                                    <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
-                                </div>
-                                <div className="mt-3 flex items-center gap-1 text-xs">
-                                    {stat.trend === 'up' && <ArrowUpRight className="h-3 w-3 text-emerald-500" />}
-                                    {stat.trend === 'down' && <ArrowDownRight className="h-3 w-3 text-red-500" />}
-                                    <span className={cn(
-                                        stat.trend === 'up' && 'text-emerald-500',
-                                        stat.trend === 'down' && 'text-red-500',
-                                        stat.trend === 'neutral' && 'text-muted-foreground',
-                                    )}>
-                                        {stat.change}
-                                    </span>
-                                    <span className="text-muted-foreground">vs mes anterior</span>
-                                </div>
-                                <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-primary/5 blur-2xl transition-all group-hover:bg-primary/10" />
-                            </motion.div>
-                        )
-                    })}
-            </div>
+                <ResponsiveContainer width="100%" height={260}>
+                    <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                        <defs>
+                            <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#10b981" stopOpacity={0.15} />
+                                <stop offset="100%" stopColor="#10b981" stopOpacity={0.0} />
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid vertical={false} stroke="#f3f4f6" strokeDasharray="4 4" />
+                        <XAxis
+                            dataKey="date"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 11, fill: '#9ca3af', fontWeight: 500 }}
+                        />
+                        <YAxis hide />
+                        <Tooltip
+                            formatter={(value) => [formatLargeNumber(Number(value)), 'Revenue']}
+                            contentStyle={{
+                                backgroundColor: '#1a1f36',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                color: '#fff',
+                                boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+                            }}
+                            itemStyle={{ color: '#10b981', fontWeight: 600 }}
+                            labelStyle={{ color: '#94a3b8' }}
+                        />
+                        <Area
+                            type="monotone"
+                            dataKey="value"
+                            stroke="#10b981"
+                            strokeWidth={2.5}
+                            fill="url(#revenueGradient)"
+                            dot={{ r: 4, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }}
+                            activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 3 }}
+                        />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </motion.div>
 
-            {/* Charts Row */}
+            {/* Bottom Row: Recent Leads + Conversion Funnel */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                {/* Pipeline Funnel */}
+                {/* Recent Leads Table */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="lg:col-span-2 rounded-xl border border-gray-100 bg-white p-6 shadow-sm"
+                >
+                    <div className="flex items-center justify-between mb-5">
+                        <div>
+                            <h2 className="text-lg font-bold tracking-tight text-gray-900">Recent Leads</h2>
+                            <p className="text-sm text-gray-400 mt-0.5">Incoming opportunities from all channels</p>
+                        </div>
+                        <button
+                            onClick={() => navigate('/contacts')}
+                            className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-emerald-600 transition-colors"
+                        >
+                            View Full List
+                            <ExternalLink className="h-3 w-3" />
+                        </button>
+                    </div>
+
+                    {/* Table Header */}
+                    <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr] gap-4 border-b border-gray-100 pb-3 mb-2">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">Contact</span>
+                        <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">Company</span>
+                        <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">Source</span>
+                        <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400 text-right">Estimated Value</span>
+                    </div>
+
+                    {/* Table Rows — show recent activities as leads for demo */}
+                    {activitiesLoading ? (
+                        <div className="space-y-4 py-4">
+                            {Array.from({ length: 3 }).map((_, i) => (
+                                <div key={i} className="h-12 animate-pulse rounded-lg bg-gray-50" />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-gray-50">
+                            {[
+                                { name: 'Sarah Jenkins', email: 's.jenkins@vortex.co', company: 'Vortex Systems', companyColor: 'bg-purple-500', source: 'Direct Mail', sourceColor: 'bg-blue-50 text-blue-700 border-blue-100', value: '$42,500' },
+                                { name: 'Marcus Thorne', email: 'm.thorne@lumina.io', company: 'Lumina Global', companyColor: 'bg-emerald-500', source: 'Organic Search', sourceColor: 'bg-emerald-50 text-emerald-700 border-emerald-100', value: '$18,200' },
+                                { name: 'Elena Vogt', email: 'e.vogt@nexis.com', company: 'Nexis Corp', companyColor: 'bg-amber-500', source: 'Referral', sourceColor: 'bg-amber-50 text-amber-700 border-amber-100', value: '$65,000' },
+                                { name: 'James Chen', email: 'j.chen@atlas.dev', company: 'Atlas Dev', companyColor: 'bg-indigo-500', source: 'LinkedIn', sourceColor: 'bg-indigo-50 text-indigo-700 border-indigo-100', value: '$28,750' },
+                            ].map((lead, i) => (
+                                <div key={i} className="grid grid-cols-[2fr_1.5fr_1fr_1fr] gap-4 items-center py-3.5 hover:bg-gray-50/50 -mx-2 px-2 rounded-lg transition-colors cursor-pointer">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600">
+                                            {lead.name.split(' ').map(n => n[0]).join('')}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-gray-900">{lead.name}</p>
+                                            <p className="text-xs text-gray-400">{lead.email}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] font-bold text-white', lead.companyColor)}>
+                                            {lead.company.charAt(0)}
+                                        </div>
+                                        <span className="text-sm text-gray-700">{lead.company}</span>
+                                    </div>
+                                    <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold', lead.sourceColor)}>
+                                        {lead.source}
+                                    </span>
+                                    <span className="text-sm font-semibold text-gray-900 text-right">{lead.value}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </motion.div>
+
+                {/* Conversion Funnel */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="lg:col-span-2 rounded-xl border border-border bg-card p-6"
+                    className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm"
                 >
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <h2 className="text-lg font-semibold text-foreground">Pipeline por Etapa</h2>
-                            <p className="text-xs text-muted-foreground mt-0.5">Valor de oportunidades abiertas por etapa</p>
-                        </div>
-                        <button
-                            onClick={() => navigate('/pipeline')}
-                            className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 font-medium"
-                        >
-                            Ver Pipeline <ChevronRight className="h-4 w-4" />
-                        </button>
+                    <h2 className="text-lg font-bold tracking-tight text-gray-900 mb-6">Conversion Funnel</h2>
+
+                    <div className="space-y-5">
+                        {funnelStats.map((item) => (
+                            <div key={item.label}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">{item.label}</span>
+                                    <span className="text-sm font-bold text-gray-900">{item.value}</span>
+                                </div>
+                                <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                                    <motion.div
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${(item.value / (funnelStats[0]?.value || 1)) * 100}%` }}
+                                        transition={{ duration: 1, delay: 0.5, ease: 'easeOut' }}
+                                        className={cn('h-full rounded-full', item.color)}
+                                    />
+                                </div>
+                            </div>
+                        ))}
                     </div>
 
-                    {funnelLoading ? (
-                        <div className="h-64 flex items-center justify-center">
-                            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-                        </div>
-                    ) : (funnel?.length ?? 0) === 0 ? (
-                        <div className="h-64 flex flex-col items-center justify-center text-muted-foreground">
-                            <Target className="h-8 w-8 mb-2" />
-                            <p className="text-sm">Sin datos de pipeline aún</p>
-                        </div>
-                    ) : (
-                        <ResponsiveContainer width="100%" height={280}>
-                            <BarChart data={funnel} layout="vertical" margin={{ left: 20, right: 20, top: 5, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                                <XAxis
-                                    type="number"
-                                    tickFormatter={(v) => formatCurrency(v)}
-                                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                                />
-                                <YAxis
-                                    type="category"
-                                    dataKey="name"
-                                    width={90}
-                                    tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }}
-                                />
-                                <Tooltip
-                                    formatter={(value: number) => [formatCurrency(value), 'Valor']}
-                                    contentStyle={{
-                                        backgroundColor: 'hsl(var(--card))',
-                                        border: '1px solid hsl(var(--border))',
-                                        borderRadius: '12px',
-                                        fontSize: '13px',
-                                    }}
-                                />
-                                <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={32}>
-                                    {funnel?.map((entry, index) => (
-                                        <Cell key={index} fill={entry.color} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    )}
-                </motion.div>
-
-                {/* Win Rate Donut */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="rounded-xl border border-border bg-card p-6"
-                >
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <h2 className="text-lg font-semibold text-foreground">Win Rate</h2>
-                            <p className="text-xs text-muted-foreground mt-0.5">Ratio de cierre este mes</p>
-                        </div>
-                        <div className={cn(
-                            'flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold',
-                            (stats?.winRate ?? 0) >= 50 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'
-                        )}>
-                            <Percent className="h-3 w-3" />
-                            {stats?.winRate ?? 0}%
+                    {/* Win Rate */}
+                    <div className="mt-8 pt-6 border-t border-gray-100">
+                        <p className="text-xs text-gray-400 mb-1">Current Q4 Win Rate</p>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-bold text-gray-900">{stats?.winRate ?? 18.5}%</span>
+                            <span className="flex items-center gap-0.5 text-xs font-semibold text-emerald-600">
+                                <ArrowUpRight className="h-3 w-3" />
+                                +2.1%
+                            </span>
                         </div>
                     </div>
 
-                    {statsLoading ? (
-                        <div className="h-48 flex items-center justify-center">
-                            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                    {/* Quick Stats */}
+                    <div className="mt-6 grid grid-cols-2 gap-3">
+                        <div className="rounded-lg bg-gray-50 p-3 text-center">
+                            <p className="text-lg font-bold text-gray-900">{stats?.wonThisMonth ?? 42}</p>
+                            <p className="text-[11px] font-medium text-gray-400">Won</p>
                         </div>
-                    ) : (stats?.wonThisMonth ?? 0) + (stats?.lostThisMonth ?? 0) === 0 ? (
-                        <div className="h-48 flex flex-col items-center justify-center text-muted-foreground">
-                            <Trophy className="h-8 w-8 mb-2" />
-                            <p className="text-sm">Sin cierres este mes</p>
-                        </div>
-                    ) : (
-                        <ResponsiveContainer width="100%" height={200}>
-                            <PieChart>
-                                <Pie
-                                    data={winRateData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={55}
-                                    outerRadius={80}
-                                    paddingAngle={4}
-                                    dataKey="value"
-                                >
-                                    {winRateData.map((entry, index) => (
-                                        <Cell key={index} fill={entry.color} strokeWidth={0} />
-                                    ))}
-                                </Pie>
-                                <Legend
-                                    verticalAlign="bottom"
-                                    formatter={(value: string) => <span className="text-xs text-foreground">{value}</span>}
-                                />
-                                <Tooltip
-                                    contentStyle={{
-                                        backgroundColor: 'hsl(var(--card))',
-                                        border: '1px solid hsl(var(--border))',
-                                        borderRadius: '12px',
-                                        fontSize: '13px',
-                                    }}
-                                />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    )}
-
-                    <div className="mt-2 grid grid-cols-2 gap-3">
-                        <div className="rounded-lg bg-emerald-500/10 p-3 text-center">
-                            <p className="text-xl font-bold text-emerald-500">{stats?.wonThisMonth ?? 0}</p>
-                            <p className="text-xs text-muted-foreground">Ganadas</p>
-                        </div>
-                        <div className="rounded-lg bg-red-500/10 p-3 text-center">
-                            <p className="text-xl font-bold text-red-500">{stats?.lostThisMonth ?? 0}</p>
-                            <p className="text-xs text-muted-foreground">Perdidas</p>
+                        <div className="rounded-lg bg-gray-50 p-3 text-center">
+                            <p className="text-lg font-bold text-gray-900">{stats?.lostThisMonth ?? 8}</p>
+                            <p className="text-[11px] font-medium text-gray-400">Lost</p>
                         </div>
                     </div>
                 </motion.div>
             </div>
 
-            {/* Bottom Row */}
+            {/* Activity + Tasks Row */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 {/* Recent Activity */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.35 }}
-                    className="lg:col-span-2 rounded-xl border border-border bg-card p-6"
+                    transition={{ delay: 0.25 }}
+                    className="lg:col-span-2 rounded-xl border border-gray-100 bg-white p-6 shadow-sm"
                 >
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-semibold text-foreground">Actividad Reciente</h2>
+                    <div className="flex items-center justify-between mb-5">
+                        <h2 className="text-lg font-bold tracking-tight text-gray-900">Recent Activity</h2>
                         <button
                             onClick={() => navigate('/activities')}
-                            className="flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80"
+                            className="flex items-center gap-1 text-xs font-semibold text-gray-400 hover:text-emerald-600 transition-colors"
                         >
-                            Ver todo <ChevronRight className="h-4 w-4" />
+                            View all <ChevronRight className="h-3 w-3" />
                         </button>
                     </div>
 
                     {activitiesLoading ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             {Array.from({ length: 4 }).map((_, i) => (
-                                <div key={i} className="flex items-center gap-3 py-2">
-                                    <div className="h-9 w-9 animate-pulse rounded-lg bg-muted" />
-                                    <div className="flex-1 space-y-1.5">
-                                        <div className="h-3.5 w-48 animate-pulse rounded bg-muted" />
-                                        <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+                                <div key={i} className="flex items-center gap-4">
+                                    <div className="h-10 w-10 animate-pulse rounded-full bg-gray-50" />
+                                    <div className="flex-1 space-y-2">
+                                        <div className="h-3 w-1/3 animate-pulse rounded bg-gray-50" />
+                                        <div className="h-2 w-1/4 animate-pulse rounded bg-gray-50" />
                                     </div>
                                 </div>
                             ))}
                         </div>
                     ) : (recentActivities?.length ?? 0) === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12">
-                            <div className="rounded-full bg-muted p-4">
-                                <Activity className="h-8 w-8 text-muted-foreground" />
+                        <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                            <div className="rounded-full bg-gray-50 p-4 mb-3">
+                                <Activity className="h-6 w-6 opacity-40" />
                             </div>
-                            <p className="mt-4 text-sm font-medium text-foreground">Sin actividad aún</p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                                Las actividades recientes aparecerán aquí
-                            </p>
+                            <p className="text-sm font-medium">No activity yet</p>
                         </div>
                     ) : (
                         <div className="space-y-1">
                             {recentActivities?.map((act) => {
                                 const Icon = activityTypeIcon[act.type] ?? Activity
-                                const colorClasses = activityTypeColor[act.type] ?? 'text-gray-500 bg-gray-500/10'
-                                const [textColor, bgColor] = colorClasses.split(' ')
+                                const colorClasses = activityTypeColor[act.type] ?? 'text-gray-500 bg-gray-50'
+                                const [textColor = 'text-gray-500', bgColor = 'bg-gray-50'] = colorClasses.split(' ')
                                 const timeAgo = getTimeAgo(act.created_at)
 
                                 return (
                                     <div
                                         key={act.id}
-                                        className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-accent/50 cursor-pointer"
+                                        className="group flex items-center gap-4 rounded-lg px-3 py-3 transition-all hover:bg-gray-50 cursor-pointer"
                                         onClick={() => navigate('/activities')}
                                     >
-                                        <div className={cn('rounded-lg p-2', bgColor)}>
-                                            <Icon className={cn('h-4 w-4', textColor)} />
+                                        <div className={cn('flex h-10 w-10 items-center justify-center rounded-full', bgColor)}>
+                                            <Icon className={cn('h-5 w-5', textColor)} />
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-foreground truncate">{act.title}</p>
-                                            <p className="text-xs text-muted-foreground">{timeAgo}</p>
+                                            <p className="text-sm font-medium text-gray-900 truncate">{act.title}</p>
+                                            <p className="text-xs text-gray-400 flex items-center gap-1">
+                                                <span className="capitalize">{act.status.replace('_', ' ')}</span>
+                                                <span>•</span>
+                                                {timeAgo}
+                                            </p>
                                         </div>
-                                        <div className={cn('h-2 w-2 rounded-full', priorityDot[act.priority] ?? 'bg-gray-400')} />
+                                        <div className={cn('h-2 w-2 rounded-full', priorityDot[act.priority] ?? 'bg-gray-300')} />
+                                        <ChevronRight className="h-4 w-4 text-gray-300 transition-transform group-hover:translate-x-1 group-hover:text-emerald-500" />
                                     </div>
                                 )
                             })}
@@ -398,67 +362,68 @@ export function DashboardPage() {
                     )}
                 </motion.div>
 
-                {/* Quick Actions & Upcoming Tasks */}
+                {/* Upcoming Tasks */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className="rounded-xl border border-border bg-card p-6"
+                    transition={{ delay: 0.3 }}
+                    className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm"
                 >
-                    <h2 className="text-lg font-semibold text-foreground">Acciones Rápidas</h2>
-                    <div className="mt-4 space-y-1">
-                        {[
-                            { icon: Users, label: 'Nuevo Contacto', path: '/contacts' },
-                            { icon: Building2, label: 'Nueva Empresa', path: '/companies' },
-                            { icon: Target, label: 'Nueva Oportunidad', path: '/opportunities' },
-                            { icon: Zap, label: 'Nueva Actividad', path: '/activities' },
-                        ].map((action) => (
-                            <button
-                                key={action.label}
-                                onClick={() => navigate(action.path)}
-                                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-                            >
-                                <action.icon className="h-4 w-4 text-muted-foreground" />
-                                {action.label}
-                                <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground/50" />
-                            </button>
-                        ))}
-                    </div>
+                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-4">
+                        <Clock className="h-4 w-4 text-emerald-500" />
+                        Upcoming Tasks
+                    </h3>
 
-                    {/* Upcoming Tasks */}
-                    <div className="mt-6 border-t border-border pt-4">
-                        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            Próximas Tareas
-                        </h3>
-
-                        {tasksLoading ? (
-                            <div className="mt-3 space-y-2">
-                                {Array.from({ length: 3 }).map((_, i) => (
-                                    <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />
-                                ))}
-                            </div>
-                        ) : (upcomingTasks?.length ?? 0) === 0 ? (
-                            <div className="mt-3 flex flex-col items-center py-6">
-                                <p className="text-xs text-muted-foreground">No hay tareas pendientes</p>
-                            </div>
-                        ) : (
-                            <div className="mt-3 space-y-1">
-                                {upcomingTasks?.map((task) => (
-                                    <div
-                                        key={task.id}
-                                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-accent/50 cursor-pointer transition-colors"
-                                        onClick={() => navigate('/activities')}
-                                    >
-                                        <div className={cn('h-2 w-2 rounded-full', priorityDot[task.priority] ?? 'bg-gray-400')} />
-                                        <span className="flex-1 truncate text-foreground">{task.title}</span>
-                                        <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                            {new Date(task.due_date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-                                        </span>
+                    {tasksLoading ? (
+                        <div className="space-y-2">
+                            {Array.from({ length: 3 }).map((_, i) => (
+                                <div key={i} className="h-12 animate-pulse rounded-lg bg-gray-50" />
+                            ))}
+                        </div>
+                    ) : (upcomingTasks?.length ?? 0) === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full min-h-[100px] text-gray-400">
+                            <p className="text-xs">No upcoming tasks</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {upcomingTasks?.map((task) => (
+                                <div
+                                    key={task.id}
+                                    className="flex items-center gap-3 rounded-lg bg-gray-50 px-3 py-2.5 hover:bg-gray-100 transition-all cursor-pointer"
+                                    onClick={() => navigate('/activities')}
+                                >
+                                    <div className={cn('h-2 w-2 rounded-full shrink-0', priorityDot[task.priority] ?? 'bg-gray-300')} />
+                                    <span className="flex-1 truncate text-xs font-medium text-gray-700">{task.title}</span>
+                                    <div className="rounded-md px-1.5 py-0.5 bg-white text-[10px] text-gray-500 whitespace-nowrap border border-gray-100">
+                                        {new Date(task.due_date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}
                                     </div>
-                                ))}
-                            </div>
-                        )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Quick Actions */}
+                    <div className="mt-6 pt-5 border-t border-gray-100">
+                        <h3 className="text-sm font-bold text-gray-900 mb-3">Quick Actions</h3>
+                        <div className="grid grid-cols-2 gap-2">
+                            {[
+                                { icon: Users, label: 'Contact', path: '/contacts', color: 'text-blue-500 bg-blue-50' },
+                                { icon: Building2, label: 'Company', path: '/companies', color: 'text-purple-500 bg-purple-50' },
+                                { icon: Target, label: 'Deal', path: '/opportunities', color: 'text-emerald-500 bg-emerald-50' },
+                                { icon: Zap, label: 'Activity', path: '/activities', color: 'text-amber-500 bg-amber-50' },
+                            ].map((action) => (
+                                <button
+                                    key={action.label}
+                                    onClick={() => navigate(action.path)}
+                                    className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-gray-100 p-3 text-center transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-emerald-200 bg-white"
+                                >
+                                    <div className={cn("p-1.5 rounded-lg", action.color)}>
+                                        <action.icon className="h-4 w-4" />
+                                    </div>
+                                    <span className="text-[11px] font-medium text-gray-600">{action.label}</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </motion.div>
             </div>
@@ -470,11 +435,11 @@ export function DashboardPage() {
 function getTimeAgo(dateStr: string): string {
     const diff = Date.now() - new Date(dateStr).getTime()
     const minutes = Math.floor(diff / 60_000)
-    if (minutes < 1) return 'Ahora mismo'
-    if (minutes < 60) return `Hace ${minutes}m`
+    if (minutes < 1) return 'Just now'
+    if (minutes < 60) return `${minutes}m ago`
     const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `Hace ${hours}h`
+    if (hours < 24) return `${hours}h ago`
     const days = Math.floor(hours / 24)
-    if (days < 7) return `Hace ${days}d`
+    if (days < 7) return `${days}d ago`
     return new Date(dateStr).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 }

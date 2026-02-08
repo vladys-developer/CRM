@@ -6,6 +6,11 @@ interface PrivateRouteProps {
 }
 
 export function PrivateRoute({ children }: PrivateRouteProps) {
+    // In development, bypass auth (Supabase auth API may not be reachable)
+    if (import.meta.env.DEV) {
+        return <>{children}</>
+    }
+
     const { isAuthenticated, loading } = useAuth()
 
     if (loading) {
@@ -25,4 +30,3 @@ export function PrivateRoute({ children }: PrivateRouteProps) {
 
     return <>{children}</>
 }
-

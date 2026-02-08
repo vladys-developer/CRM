@@ -8,18 +8,18 @@ export function MainLayout() {
     const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed)
 
     return (
-        <div className="flex min-h-screen bg-background">
+        <div className="flex min-h-screen bg-mesh text-foreground">
             <Sidebar />
 
             <div
                 className={cn(
-                    'flex flex-1 flex-col transition-all duration-200',
-                    sidebarCollapsed ? 'md:ml-[72px]' : 'md:ml-[260px]'
+                    'flex h-screen flex-1 flex-col transition-all duration-300 ease-in-out',
+                    sidebarCollapsed ? 'md:ml-[72px]' : 'md:ml-[240px]',
                 )}
             >
                 <Header />
 
-                <main className="flex-1 overflow-y-auto p-6">
+                <main className="flex-1 overflow-y-auto p-6 bg-white/60">
                     <Outlet />
                 </main>
             </div>

@@ -27,7 +27,7 @@ export const useUIStore = create<UIState>()(
         (set) => ({
             sidebarOpen: true,
             sidebarCollapsed: false,
-            theme: 'dark',
+            theme: 'light',
             globalSearchOpen: false,
             globalSearchQuery: '',
 

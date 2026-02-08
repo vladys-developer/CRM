@@ -1,10 +1,8 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
     Search,
     Plus,
-    Filter,
-    MoreHorizontal,
     Trash2,
     ChevronLeft,
     ChevronRight,
@@ -12,26 +10,55 @@ import {
     Mail,
     Phone,
     FileSpreadsheet,
+    UserPlus,
 } from 'lucide-react'
 import { cn, formatDate, getInitials } from '@/lib/utils'
 import { useContacts, useDeleteContact } from '@/hooks/useContacts'
-import { CONTACT_STATUS_OPTIONS, CONTACT_SOURCE_OPTIONS, PRIORITY_OPTIONS } from '@/constants'
+import { CONTACT_STATUS_OPTIONS } from '@/constants'
 import { ContactFormModal } from '@/components/contacts/ContactFormModal'
 import { ImportExportModal } from '@/components/shared/ImportExportModal'
 import { CONTACT_FIELDS, CONTACT_EXPORT_COLUMNS } from '@/lib/csv'
 import { bulkCreateContacts, getAllContactsForExport } from '@/lib/api/contacts'
 import type { ContactFilters } from '@/lib/api/contacts'
 
+// Avatar color palette for initials
+const avatarColors = [
+    'from-emerald-400 to-emerald-600',
+    'from-blue-400 to-blue-600',
+    'from-purple-400 to-purple-600',
+    'from-amber-400 to-amber-600',
+    'from-pink-400 to-pink-600',
+    'from-indigo-400 to-indigo-600',
+    'from-teal-400 to-teal-600',
+    'from-rose-400 to-rose-600',
+]
+
+function getAvatarColor(name: string) {
+    let hash = 0
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+    return avatarColors[Math.abs(hash) % avatarColors.length]
+}
+
+// Status badge config
+const statusConfig: Record<string, { bg: string; text: string; border: string }> = {
+    active: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100' },
+    lead: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-100' },
+    customer: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100' },
+    inactive: { bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-100' },
+    prospect: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-100' },
+    churned: { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-100' },
+}
+
+const defaultStatus = { bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-100' }
+
 export function ContactsPage() {
     const navigate = useNavigate()
     const [page, setPage] = useState(1)
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState('')
-    const [showFilters, setShowFilters] = useState(false)
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [showImportExport, setShowImportExport] = useState(false)
     const [exportData, setExportData] = useState<Record<string, unknown>[]>([])
-    const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
 
     const filters: ContactFilters = useMemo(
         () => ({
@@ -53,63 +80,17 @@ export function ContactsPage() {
     const contacts = data?.data ?? []
     const totalPages = data?.totalPages ?? 1
     const totalCount = data?.count ?? 0
-
-    const toggleRow = (id: string) => {
-        const next = new Set(selectedRows)
-        if (next.has(id)) {
-            next.delete(id)
-        } else {
-            next.add(id)
-        }
-        setSelectedRows(next)
-    }
-
-    const toggleAll = () => {
-        if (selectedRows.size === contacts.length) {
-            setSelectedRows(new Set())
-        } else {
-            setSelectedRows(new Set(contacts.map((c) => c.id)))
-        }
-    }
-
-    const getStatusBadge = (status: string) => {
-        const opt = CONTACT_STATUS_OPTIONS.find((o) => o.value === status)
-        return (
-            <span
-                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
-                style={{
-                    backgroundColor: `${opt?.color}15`,
-                    color: opt?.color,
-                }}
-            >
-                <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ backgroundColor: opt?.color }}
-                />
-                {opt?.label ?? status}
-            </span>
-        )
-    }
-
-    const getPriorityDot = (priority: string) => {
-        const opt = PRIORITY_OPTIONS.find((o) => o.value === priority)
-        return (
-            <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: opt?.color }}
-                title={opt?.label}
-            />
-        )
-    }
+    const pageStart = (page - 1) * 25 + 1
+    const pageEnd = Math.min(page * 25, totalCount)
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-5 max-w-[1400px]">
             {/* Page Header */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Contactos</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Gestiona tu base de contactos y leads
+                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">Contact Directory</h1>
+                    <p className="text-sm font-medium text-gray-500 mt-1">
+                        Manage and track your high-value sales relationships.
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -119,267 +100,305 @@ export function ContactsPage() {
                             setExportData(data as unknown as Record<string, unknown>[])
                             setShowImportExport(true)
                         }}
-                        className="inline-flex items-center gap-2 rounded-lg border border-input px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+                        className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
                     >
-                        <FileSpreadsheet className="h-4 w-4" />
-                        Importar / Exportar
+                        <FileSpreadsheet className="h-4 w-4 text-gray-400" />
+                        Import / Export
                     </button>
                     <button
                         onClick={() => setShowCreateModal(true)}
-                        className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                        className="flex items-center gap-2 rounded-xl bg-[#1a1f36] px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-gray-900/10 transition-all hover:bg-[#252b45] hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
                     >
-                        <Plus className="h-4 w-4" />
-                        Nuevo Contacto
+                        <UserPlus className="h-4 w-4" />
+                        New Contact
                     </button>
                 </div>
             </div>
 
-            {/* Toolbar */}
-            <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center">
-                {/* Search */}
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            {/* Search & Filter Bar */}
+            <div className="flex items-center gap-3">
+                <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                     <input
                         type="text"
-                        placeholder="Buscar por nombre, email o teléfono..."
                         value={searchQuery}
                         onChange={(e) => {
                             setSearchQuery(e.target.value)
                             setPage(1)
                         }}
-                        className="h-9 w-full rounded-lg border border-input bg-background pl-9 pr-4 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary/30"
+                        placeholder="Search by name, email, or company..."
+                        className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-10 pr-4 text-sm text-gray-700 outline-none transition-all placeholder:text-gray-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/10"
                     />
                 </div>
 
-                {/* Filters */}
-                <div className="flex items-center gap-2">
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => {
-                            setStatusFilter(e.target.value)
-                            setPage(1)
-                        }}
-                        className="h-9 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary"
-                    >
-                        <option value="">Todos los estados</option>
-                        {CONTACT_STATUS_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                            </option>
-                        ))}
-                    </select>
+                {/* Status filter pills */}
+                <div className="flex items-center gap-1.5">
+                    {['', 'active', 'lead', 'customer', 'inactive'].map((val) => {
+                        const label = val === '' ? 'All' : val.charAt(0).toUpperCase() + val.slice(1)
+                        return (
+                            <button
+                                key={val}
+                                onClick={() => {
+                                    setStatusFilter(val)
+                                    setPage(1)
+                                }}
+                                className={cn(
+                                    'rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
+                                    statusFilter === val
+                                        ? 'bg-gray-900 text-white shadow-sm'
+                                        : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
+                                )}
+                            >
+                                {label}
+                            </button>
+                        )
+                    })}
+                </div>
 
-                    <button
-                        onClick={() => setShowFilters(!showFilters)}
-                        className={cn(
-                            'flex h-9 items-center gap-2 rounded-lg border border-input px-3 text-sm transition-colors hover:bg-accent',
-                            showFilters && 'border-primary bg-primary/5 text-primary'
-                        )}
-                    >
-                        <Filter className="h-3.5 w-3.5" />
-                        Filtros
-                    </button>
+                {/* Results count */}
+                <div className="ml-auto text-xs text-gray-400 font-medium">
+                    Showing {pageStart} to {pageEnd} of {totalCount} results
                 </div>
             </div>
 
             {/* Table */}
-            <div className="overflow-hidden rounded-xl border border-border bg-card">
-                <div className="overflow-x-auto">
+            <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+                {isLoading ? (
+                    <div className="p-8">
+                        <div className="space-y-4">
+                            {Array.from({ length: 8 }).map((_, i) => (
+                                <div key={i} className="flex items-center gap-4">
+                                    <div className="h-10 w-10 animate-pulse rounded-full bg-gray-50" />
+                                    <div className="flex-1 space-y-2">
+                                        <div className="h-3 w-1/3 animate-pulse rounded bg-gray-50" />
+                                        <div className="h-2 w-1/4 animate-pulse rounded bg-gray-50" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : error ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-red-500">
+                        <p className="text-sm font-medium">Error loading contacts</p>
+                        <p className="text-xs text-gray-400 mt-1">{String(error)}</p>
+                    </div>
+                ) : contacts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                        <div className="rounded-full bg-gray-50 p-6 mb-4">
+                            <Users className="h-10 w-10 opacity-30" />
+                        </div>
+                        <p className="text-base font-medium text-gray-600 mb-1">No contacts found</p>
+                        <p className="text-sm text-gray-400 mb-4">
+                            {searchQuery ? 'Try a different search term' : 'Add your first contact to get started'}
+                        </p>
+                        <button
+                            onClick={() => setShowCreateModal(true)}
+                            className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-600"
+                        >
+                            <Plus className="h-4 w-4" />
+                            Add Contact
+                        </button>
+                    </div>
+                ) : (
                     <table className="w-full">
                         <thead>
-                            <tr className="border-b border-border bg-muted/50">
-                                <th className="w-10 px-4 py-3">
-                                    <input
-                                        type="checkbox"
-                                        checked={contacts.length > 0 && selectedRows.size === contacts.length}
-                                        onChange={toggleAll}
-                                        className="h-4 w-4 rounded border-input"
-                                    />
+                            <tr className="border-b border-gray-100 bg-gray-50/80">
+                                <th className="px-5 py-3 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">
+                                    Contact
                                 </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                                    Contacto
+                                <th className="px-5 py-3 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">
+                                    Status
                                 </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                                    Email
+                                <th className="px-5 py-3 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">
+                                    Position
                                 </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                                    Teléfono
+                                <th className="px-5 py-3 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">
+                                    Phone
                                 </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                                    Estado
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                                <th className="px-5 py-3 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">
                                     Lead Score
                                 </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                                    Creado
+                                <th className="px-5 py-3 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">
+                                    Added
                                 </th>
-                                <th className="w-10 px-4 py-3" />
+                                <th className="px-5 py-3 text-right text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">
+                                    Actions
+                                </th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {isLoading ? (
-                                // Skeleton rows
-                                Array.from({ length: 5 }).map((_, i) => (
-                                    <tr key={i} className="border-b border-border">
-                                        <td className="px-4 py-3"><div className="h-4 w-4 animate-pulse rounded bg-muted" /></td>
-                                        <td className="px-4 py-3"><div className="h-4 w-32 animate-pulse rounded bg-muted" /></td>
-                                        <td className="px-4 py-3"><div className="h-4 w-40 animate-pulse rounded bg-muted" /></td>
-                                        <td className="px-4 py-3"><div className="h-4 w-28 animate-pulse rounded bg-muted" /></td>
-                                        <td className="px-4 py-3"><div className="h-5 w-20 animate-pulse rounded-full bg-muted" /></td>
-                                        <td className="px-4 py-3"><div className="h-4 w-12 animate-pulse rounded bg-muted" /></td>
-                                        <td className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-muted" /></td>
-                                        <td className="px-4 py-3" />
-                                    </tr>
-                                ))
-                            ) : contacts.length === 0 ? (
-                                // Empty state
-                                <tr>
-                                    <td colSpan={8} className="px-4 py-16 text-center">
-                                        <div className="flex flex-col items-center">
-                                            <div className="rounded-full bg-muted p-4">
-                                                <Users className="h-8 w-8 text-muted-foreground" />
-                                            </div>
-                                            <h3 className="mt-4 text-sm font-semibold text-foreground">
-                                                No hay contactos
-                                            </h3>
-                                            <p className="mt-1 text-sm text-muted-foreground">
-                                                Crea tu primer contacto para empezar
-                                            </p>
-                                            <button
-                                                onClick={() => setShowCreateModal(true)}
-                                                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                                            >
-                                                <Plus className="h-4 w-4" />
-                                                Nuevo Contacto
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : (
-                                contacts.map((contact) => (
+                        <tbody className="divide-y divide-gray-50">
+                            {contacts.map((contact) => {
+                                const fullName = `${contact.first_name ?? ''} ${contact.last_name ?? ''}`.trim() || 'Sin nombre'
+                                const initials = getInitials(fullName)
+                                const colorGradient = getAvatarColor(fullName)
+                                const statusKey = contact.status?.toLowerCase() ?? 'inactive'
+                                const sConfig = statusConfig[statusKey] ?? defaultStatus
+
+                                return (
                                     <tr
                                         key={contact.id}
                                         onClick={() => navigate(`/contacts/${contact.id}`)}
-                                        className={cn(
-                                            'cursor-pointer border-b border-border transition-colors hover:bg-muted/50',
-                                            selectedRows.has(contact.id) && 'bg-primary/5'
-                                        )}
+                                        className="group cursor-pointer transition-colors hover:bg-gray-50/80"
                                     >
-                                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedRows.has(contact.id)}
-                                                onChange={() => toggleRow(contact.id)}
-                                                className="h-4 w-4 rounded border-input"
-                                            />
-                                        </td>
-                                        <td className="px-4 py-3">
+                                        {/* Contact */}
+                                        <td className="px-5 py-3.5">
                                             <div className="flex items-center gap-3">
-                                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                                                    {getInitials(
-                                                        `${contact.first_name} ${contact.last_name ?? ''}`
-                                                    )}
+                                                <div className={cn(
+                                                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-semibold text-white shadow-sm',
+                                                    colorGradient
+                                                )}>
+                                                    {initials}
                                                 </div>
                                                 <div>
-                                                    <p className="font-medium text-foreground">
-                                                        {contact.first_name} {contact.last_name}
+                                                    <p className="text-sm font-semibold text-gray-900 group-hover:text-emerald-600 transition-colors">
+                                                        {fullName}
                                                     </p>
-                                                    {contact.job_title && (
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {contact.job_title}
-                                                        </p>
-                                                    )}
+                                                    <p className="text-xs text-gray-400">{contact.email ?? '—'}</p>
                                                 </div>
-                                                {getPriorityDot(contact.priority)}
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3">
-                                            {contact.email ? (
-                                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                                    <Mail className="h-3 w-3" />
-                                                    {contact.email}
-                                                </div>
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground/50">—</span>
-                                            )}
+
+                                        {/* Status */}
+                                        <td className="px-5 py-3.5">
+                                            <span className={cn(
+                                                'inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
+                                                sConfig.bg, sConfig.text, sConfig.border
+                                            )}>
+                                                {CONTACT_STATUS_OPTIONS.find(o => o.value === contact.status)?.label ?? contact.status ?? '—'}
+                                            </span>
                                         </td>
-                                        <td className="px-4 py-3">
-                                            {contact.phone_mobile ? (
-                                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                                    <Phone className="h-3 w-3" />
-                                                    {contact.phone_mobile}
-                                                </div>
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground/50">—</span>
-                                            )}
+
+                                        {/* Position */}
+                                        <td className="px-5 py-3.5">
+                                            <span className="text-sm text-gray-700">
+                                                {contact.job_title ?? '—'}
+                                            </span>
                                         </td>
-                                        <td className="px-4 py-3">{getStatusBadge(contact.status)}</td>
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                                                    <div
-                                                        className="h-full rounded-full bg-primary transition-all"
-                                                        style={{ width: `${contact.lead_score}%` }}
-                                                    />
-                                                </div>
-                                                <span className="text-xs font-medium text-muted-foreground">
-                                                    {contact.lead_score}
-                                                </span>
+
+                                        {/* Phone */}
+                                        <td className="px-5 py-3.5">
+                                            <span className="text-sm text-gray-500 font-mono text-xs">
+                                                {contact.phone_mobile ?? '—'}
+                                            </span>
+                                        </td>
+
+                                        {/* Lead Score */}
+                                        <td className="px-5 py-3.5">
+                                            <span className="text-sm text-gray-500">
+                                                {contact.lead_score != null
+                                                    ? contact.lead_score
+                                                    : '—'}
+                                            </span>
+                                        </td>
+
+                                        {/* Added */}
+                                        <td className="px-5 py-3.5">
+                                            <span className="text-sm text-gray-500">
+                                                {formatDate(contact.created_at)}
+                                            </span>
+                                        </td>
+
+                                        {/* Actions */}
+                                        <td className="px-5 py-3.5 text-right">
+                                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        window.location.href = `mailto:${contact.email}`
+                                                    }}
+                                                    className="rounded-lg p-1.5 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                                                    title="Send Email"
+                                                >
+                                                    <Mail className="h-4 w-4" />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        window.location.href = `tel:${contact.phone_mobile}`
+                                                    }}
+                                                    className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                                    title="Call"
+                                                >
+                                                    <Phone className="h-4 w-4" />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        if (confirm('¿Eliminar este contacto?')) {
+                                                            deleteContact.mutate(contact.id)
+                                                        }
+                                                    }}
+                                                    className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </button>
                                             </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-muted-foreground">
-                                            {formatDate(contact.created_at)}
-                                        </td>
-                                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                                            <button className="rounded-lg p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-accent group-hover:opacity-100 [tr:hover_&]:opacity-100">
-                                                <MoreHorizontal className="h-4 w-4" />
-                                            </button>
                                         </td>
                                     </tr>
-                                ))
-                            )}
+                                )
+                            })}
                         </tbody>
                     </table>
-                </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div className="flex items-center justify-between border-t border-border px-4 py-3">
-                        <p className="text-sm text-muted-foreground">
-                            Mostrando {((page - 1) * 25) + 1}-{Math.min(page * 25, totalCount)} de {totalCount}
-                        </p>
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={page === 1}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-input text-sm disabled:opacity-50 hover:bg-accent"
-                            >
-                                <ChevronLeft className="h-4 w-4" />
-                            </button>
-                            <span className="px-3 text-sm font-medium">
-                                {page} / {totalPages}
-                            </span>
-                            <button
-                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                disabled={page === totalPages}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-input text-sm disabled:opacity-50 hover:bg-accent"
-                            >
-                                <ChevronRight className="h-4 w-4" />
-                            </button>
-                        </div>
-                    </div>
                 )}
             </div>
 
-            {/* Create Modal */}
-            {showCreateModal && (
-                <ContactFormModal
-                    onClose={() => setShowCreateModal(false)}
-                />
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-400">
+                        Page {page} of {totalPages}
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            onClick={() => setPage(Math.max(1, page - 1))}
+                            disabled={page === 1}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        {Array.from({ length: Math.min(totalPages, 5) }).map((_, i) => {
+                            let pageNum: number
+                            if (totalPages <= 5) {
+                                pageNum = i + 1
+                            } else if (page <= 3) {
+                                pageNum = i + 1
+                            } else if (page >= totalPages - 2) {
+                                pageNum = totalPages - 4 + i
+                            } else {
+                                pageNum = page - 2 + i
+                            }
+                            return (
+                                <button
+                                    key={pageNum}
+                                    onClick={() => setPage(pageNum)}
+                                    className={cn(
+                                        'flex h-8 w-8 items-center justify-center rounded-lg text-xs font-semibold transition-colors',
+                                        page === pageNum
+                                            ? 'bg-gray-900 text-white shadow-sm'
+                                            : 'text-gray-500 hover:bg-gray-50'
+                                    )}
+                                >
+                                    {pageNum}
+                                </button>
+                            )
+                        })}
+                        <button
+                            onClick={() => setPage(Math.min(totalPages, page + 1))}
+                            disabled={page === totalPages}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
             )}
 
-            {/* Import/Export Modal */}
+            {/* Modals */}
+            {showCreateModal && (
+                <ContactFormModal onClose={() => setShowCreateModal(false)} />
+            )}
+
             {showImportExport && (
                 <ImportExportModal
                     entityType="contacts"
@@ -387,7 +406,7 @@ export function ContactsPage() {
                     fields={CONTACT_FIELDS}
                     exportColumns={CONTACT_EXPORT_COLUMNS}
                     exportData={exportData}
-                    onImport={async (records) => bulkCreateContacts(records)}
+                    onImport={bulkCreateContacts}
                     onClose={() => setShowImportExport(false)}
                 />
             )}
