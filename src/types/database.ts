@@ -8,6 +8,7 @@ export type Json =
 
 export interface Database {
     public: {
+        PostgrestVersion: '12'
         Tables: {
             teams: {
                 Row: {
