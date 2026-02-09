@@ -76,18 +76,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const initSession = async () => {
             try {
-                const { data: { session }, error } = await supabase.auth.getSession()
+                // Add validation for Supabase URL/Key to prevent silent failures
+                if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+                    throw new Error('Missing Supabase credentials')
+                }
+
+                // Race between getSession and a timeout
+                const sessionPromise = supabase.auth.getSession()
+                const timeoutPromise = new Promise<{ data: { session: null }, error: { message: string } }>((resolve) => {
+                    setTimeout(() => resolve({ data: { session: null }, error: { message: 'Auth initialization timed out' } }), 5000)
+                })
+
+                const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise])
 
                 if (cancelled) return
 
                 if (error) {
-                    console.error('[Auth] getSession error:', error.message)
+                    console.warn('[Auth] Session init warning:', error.message)
+                    // If timeout or error, just finish loading (user can try to login manually)
                     setState(prev => ({ ...prev, loading: false }))
                     return
                 }
 
                 if (session?.user) {
-                    const profile = await fetchProfile(session.user.id)
+                    // If we have a session, try to fetch profile (also with timeout)
+                    const profilePromise = fetchProfile(session.user.id)
+                    const profileTimeout = new Promise<UserProfile | null>(r => setTimeout(() => r(null), 3000))
+
+                    const profile = await Promise.race([profilePromise, profileTimeout])
+
                     if (cancelled) return
                     setState({
                         user: session.user,
