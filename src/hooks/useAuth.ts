@@ -9,6 +9,7 @@ interface AuthState {
     session: Session | null
     loading: boolean
     error: string | null
+    slowConnection: boolean
 }
 
 // Mock profile for development mode (Supabase auth API may be unreachable)
@@ -34,6 +35,7 @@ export function useAuth() {
         session: null,
         loading: isDev ? false : true,
         error: null,
+        slowConnection: false,
     })
 
     // Fetch user profile from user_profiles table
@@ -66,7 +68,7 @@ export function useAuth() {
             try {
                 const sessionPromise = supabase.auth.getSession()
                 const timeoutPromise = new Promise<null>((resolve) =>
-                    setTimeout(() => resolve(null), 8000)
+                    setTimeout(() => resolve(null), 15000)
                 )
 
                 const result = await Promise.race([sessionPromise, timeoutPromise])
@@ -83,6 +85,7 @@ export function useAuth() {
                         session,
                         loading: false,
                         error: null,
+                        slowConnection: false,
                     })
                 } else {
                     setState({
@@ -91,6 +94,7 @@ export function useAuth() {
                         session: null,
                         loading: false,
                         error: null,
+                        slowConnection: false,
                     })
                 }
             } catch {
@@ -101,6 +105,7 @@ export function useAuth() {
                     session: null,
                     loading: false,
                     error: null,
+                    slowConnection: false,
                 })
             }
         }
@@ -119,6 +124,7 @@ export function useAuth() {
                         session,
                         loading: false,
                         error: null,
+                        slowConnection: false,
                     })
                 } else if (event === 'SIGNED_OUT') {
                     setState({
@@ -127,6 +133,7 @@ export function useAuth() {
                         session: null,
                         loading: false,
                         error: null,
+                        slowConnection: false,
                     })
                 } else if (event === 'TOKEN_REFRESHED' && session) {
                     setState((prev) => ({ ...prev, session }))
@@ -140,39 +147,80 @@ export function useAuth() {
         }
     }, [isDev, fetchProfile])
 
-    // Login
+    // Login with retry logic
     const login = useCallback(async (email: string, password: string) => {
         if (isDev) return true // Auto-succeed in dev
 
-        setState((prev) => ({ ...prev, loading: true, error: null }))
-        try {
-            const loginPromise = supabase.auth.signInWithPassword({ email, password })
-            const timeoutPromise = new Promise<{ error: { message: string } }>((resolve) =>
-                setTimeout(() => resolve({ error: { message: 'Conexión lenta. Inténtalo de nuevo.' } }), 30000)
-            )
-            const result = await Promise.race([loginPromise, timeoutPromise]) as any
-            const error = result?.error
+        setState((prev) => ({ ...prev, loading: true, error: null, slowConnection: false }))
 
-            if (error) {
+        const MAX_RETRIES = 2
+        const TIMEOUT_MS = 45000 // 45s per attempt
+        const SLOW_THRESHOLD_MS = 8000 // Show "slow" warning after 8s
+
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                // Show slow connection warning after threshold
+                const slowTimer = setTimeout(() => {
+                    setState((prev) => ({ ...prev, slowConnection: true }))
+                }, SLOW_THRESHOLD_MS)
+
+                const loginPromise = supabase.auth.signInWithPassword({ email, password })
+                const timeoutPromise = new Promise<null>((resolve) =>
+                    setTimeout(() => resolve(null), TIMEOUT_MS)
+                )
+
+                const result = await Promise.race([loginPromise, timeoutPromise]) as any
+                clearTimeout(slowTimer)
+
+                // Timeout hit — retry
+                if (result === null) {
+                    if (attempt < MAX_RETRIES) {
+                        // Wait briefly before retrying
+                        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+                        continue
+                    }
+                    setState((prev) => ({
+                        ...prev,
+                        loading: false,
+                        slowConnection: false,
+                        error: 'El servidor tardó demasiado en responder. Inténtalo de nuevo.',
+                    }))
+                    return false
+                }
+
+                const error = result?.error
+                if (error) {
+                    // Auth error (bad credentials) — don't retry
+                    setState((prev) => ({
+                        ...prev,
+                        loading: false,
+                        slowConnection: false,
+                        error: error.message === 'Invalid login credentials'
+                            ? 'Credenciales incorrectas.'
+                            : error.message,
+                    }))
+                    return false
+                }
+
+                // Success
+                setState((prev) => ({ ...prev, loading: false, slowConnection: false }))
+                return true
+            } catch {
+                if (attempt < MAX_RETRIES) {
+                    await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+                    continue
+                }
                 setState((prev) => ({
                     ...prev,
                     loading: false,
-                    error: error.message === 'Invalid login credentials'
-                        ? 'Credenciales incorrectas.'
-                        : error.message,
+                    slowConnection: false,
+                    error: 'Error de conexión. Verifica tu red e inténtalo de nuevo.',
                 }))
                 return false
             }
-            setState((prev) => ({ ...prev, loading: false }))
-            return true
-        } catch (err) {
-            setState((prev) => ({
-                ...prev,
-                loading: false,
-                error: 'Error de conexión.',
-            }))
-            return false
         }
+
+        return false
     }, [isDev])
 
     // Register
