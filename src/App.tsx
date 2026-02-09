@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 import { ThemeProvider } from '@/components/layout/ThemeProvider'
+import { AuthProvider } from '@/contexts/AuthContext'
 import { MainLayout } from '@/components/layout/MainLayout'
 import { PrivateRoute } from '@/components/layout/PrivateRoute'
 import { LoginPage } from '@/pages/LoginPage'
@@ -78,124 +79,126 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <BrowserRouter>
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/login" element={<LoginPage />} />
+        <AuthProvider>
+          <BrowserRouter>
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/login" element={<LoginPage />} />
 
-            {/* Protected Routes */}
-            <Route
-              element={
-                <PrivateRoute>
-                  <MainLayout />
-                </PrivateRoute>
-              }
-            >
+              {/* Protected Routes */}
               <Route
-                index
                 element={
-                  <Suspense fallback={<PageLoader />}>
-                    <DashboardPage />
-                  </Suspense>
+                  <PrivateRoute>
+                    <MainLayout />
+                  </PrivateRoute>
                 }
-              />
-              <Route
-                path="contacts"
-                element={
+              >
+                <Route
+                  index
+                  element={
+                    <Suspense fallback={<PageLoader />}>
+                      <DashboardPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="contacts"
+                  element={
+                    <Suspense fallback={<PageLoader />}>
+                      <ContactsPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="contacts/:id"
+                  element={
+                    <Suspense fallback={<PageLoader />}>
+                      <ContactDetailPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="companies"
+                  element={
+                    <Suspense fallback={<PageLoader />}>
+                      <CompaniesPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="companies/:id"
+                  element={
+                    <Suspense fallback={<PageLoader />}>
+                      <CompanyDetailPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="opportunities"
+                  element={
+                    <Suspense fallback={<PageLoader />}>
+                      <OpportunitiesPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="pipeline"
+                  element={
+                    <Suspense fallback={<PageLoader />}>
+                      <PipelinePage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="activities"
+                  element={
+                    <Suspense fallback={<PageLoader />}>
+                      <ActivitiesPage />
+                    </Suspense>
+                  }
+                />
+                <Route path="inbox" element={
                   <Suspense fallback={<PageLoader />}>
-                    <ContactsPage />
+                    <InboxPage />
                   </Suspense>
-                }
-              />
-              <Route
-                path="contacts/:id"
-                element={
+                } />
+                <Route path="calendar" element={
                   <Suspense fallback={<PageLoader />}>
-                    <ContactDetailPage />
+                    <CalendarPage />
                   </Suspense>
-                }
-              />
-              <Route
-                path="companies"
-                element={
+                } />
+                <Route path="reports" element={
                   <Suspense fallback={<PageLoader />}>
-                    <CompaniesPage />
+                    <ReportsPage />
                   </Suspense>
-                }
-              />
-              <Route
-                path="companies/:id"
-                element={
+                } />
+                <Route path="automations" element={
                   <Suspense fallback={<PageLoader />}>
-                    <CompanyDetailPage />
+                    <AutomationsPage />
                   </Suspense>
-                }
-              />
-              <Route
-                path="opportunities"
-                element={
+                } />
+                <Route path="automations/new" element={
                   <Suspense fallback={<PageLoader />}>
-                    <OpportunitiesPage />
+                    <AutomationBuilderPage />
                   </Suspense>
-                }
-              />
-              <Route
-                path="pipeline"
-                element={
+                } />
+                <Route path="automations/:id/edit" element={
                   <Suspense fallback={<PageLoader />}>
-                    <PipelinePage />
+                    <AutomationBuilderPage />
                   </Suspense>
-                }
-              />
-              <Route
-                path="activities"
-                element={
+                } />
+                <Route path="settings" element={
                   <Suspense fallback={<PageLoader />}>
-                    <ActivitiesPage />
+                    <SettingsPage />
                   </Suspense>
-                }
-              />
-              <Route path="inbox" element={
-                <Suspense fallback={<PageLoader />}>
-                  <InboxPage />
-                </Suspense>
-              } />
-              <Route path="calendar" element={
-                <Suspense fallback={<PageLoader />}>
-                  <CalendarPage />
-                </Suspense>
-              } />
-              <Route path="reports" element={
-                <Suspense fallback={<PageLoader />}>
-                  <ReportsPage />
-                </Suspense>
-              } />
-              <Route path="automations" element={
-                <Suspense fallback={<PageLoader />}>
-                  <AutomationsPage />
-                </Suspense>
-              } />
-              <Route path="automations/new" element={
-                <Suspense fallback={<PageLoader />}>
-                  <AutomationBuilderPage />
-                </Suspense>
-              } />
-              <Route path="automations/:id/edit" element={
-                <Suspense fallback={<PageLoader />}>
-                  <AutomationBuilderPage />
-                </Suspense>
-              } />
-              <Route path="settings" element={
-                <Suspense fallback={<PageLoader />}>
-                  <SettingsPage />
-                </Suspense>
-              } />
-            </Route>
+                } />
+              </Route>
 
-            {/* Catch-all */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
+              {/* Catch-all */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
         <Toaster
           position="bottom-right"
           richColors

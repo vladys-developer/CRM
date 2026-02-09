@@ -1,5 +1,5 @@
 import { Search, Bell, LogOut, User, Menu, Plus, UserPlus } from 'lucide-react'
-import { useAuth } from '@/hooks/useAuth'
+import { useAuth } from '@/contexts/AuthContext'
 import { useUIStore } from '@/stores/uiStore'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useState, useRef, useEffect } from 'react'

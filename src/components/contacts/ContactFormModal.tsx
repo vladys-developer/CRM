@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Loader2 } from 'lucide-react'
 import { useCreateContact, useUpdateContact } from '@/hooks/useContacts'
-import { useAuth } from '@/hooks/useAuth'
+import { useAuth } from '@/contexts/AuthContext'
 import { CONTACT_STATUS_OPTIONS, CONTACT_SOURCE_OPTIONS, PRIORITY_OPTIONS } from '@/constants'
 import type { Contact, InsertTables, UpdateTables } from '@/types/database'
 

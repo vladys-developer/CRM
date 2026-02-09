@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/stores/uiStore'
-import { useAuth } from '@/hooks/useAuth'
+import { useAuth } from '@/contexts/AuthContext'
 import { getInitials } from '@/lib/utils'
 
 const iconMap: Record<string, LucideIcon> = {
