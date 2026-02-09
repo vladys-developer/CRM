@@ -15,7 +15,7 @@ export function LoginPage() {
     const [password, setPassword] = useState('')
     const [fullName, setFullName] = useState('')
     const [showPassword, setShowPassword] = useState(false)
-    const { login, register, loading, error, clearError, slowConnection } = useAuth()
+    const { login, register, loading, error, clearError } = useAuth()
     const navigate = useNavigate()
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -179,19 +179,6 @@ export function LoginPage() {
                             )}
                         </AnimatePresence>
 
-                        {/* Slow Connection Warning */}
-                        <AnimatePresence>
-                            {slowConnection && loading && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: -5 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -5 }}
-                                    className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400"
-                                >
-                                    Tardando más de lo habitual… Estamos conectando con el servidor.
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
 
                         {/* Submit */}
                         <button
