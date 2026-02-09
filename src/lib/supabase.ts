@@ -12,11 +12,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: {
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: true,
-    },
-    realtime: {
-        params: {
-            eventsPerSecond: 10,
-        },
+        detectSessionInUrl: false, // Disable to prevent URL hash conflicts during login
+        flowType: 'pkce',
     },
 })

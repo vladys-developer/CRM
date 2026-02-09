@@ -156,32 +156,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }, [fetchProfile])
 
-    // Login with retry logic
+    // Login with retry logic and detailed diagnostics
     const login = useCallback(async (email: string, password: string) => {
         if (isDev) return true
 
+        console.time('Auth:LoginTotal')
         setState((prev) => ({ ...prev, loading: true, error: null, slowConnection: false }))
 
         const MAX_RETRIES = 1
-        const TIMEOUT_MS = 15000 // 15s per attempt (reduced from 45s)
-        const SLOW_THRESHOLD_MS = 5000
+        const TIMEOUT_MS = 15000 // 15s per attempt
+        const SLOW_THRESHOLD_MS = 3000 // Show warning after 3s
 
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            let slowTimer: NodeJS.Timeout | undefined
+
             try {
-                const slowTimer = setTimeout(() => {
+                slowTimer = setTimeout(() => {
                     setState((prev) => ({ ...prev, slowConnection: true }))
+                    console.warn('Auth:LoginSlow - Operation taking longer than 3s')
                 }, SLOW_THRESHOLD_MS)
 
+                console.time('Auth:SignInAPI')
                 const loginPromise = supabase.auth.signInWithPassword({ email, password })
-                const timeoutPromise = new Promise<null>((resolve) =>
+                const timeoutPromise = new Promise<{ error: { message: string } } | null>((resolve) =>
                     setTimeout(() => resolve(null), TIMEOUT_MS)
                 )
 
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const result = await Promise.race([loginPromise, timeoutPromise]) as any
+                console.timeEnd('Auth:SignInAPI')
+
                 clearTimeout(slowTimer)
 
                 // Timeout hit — retry
                 if (result === null) {
+                    console.error(`Auth:Timeout - Attempt ${attempt + 1}/${MAX_RETRIES + 1} timed out after ${TIMEOUT_MS}ms`)
                     if (attempt < MAX_RETRIES) {
                         await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
                         continue
@@ -192,11 +201,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         slowConnection: false,
                         error: 'El servidor tardó demasiado en responder. Inténtalo de nuevo.',
                     }))
+                    console.timeEnd('Auth:LoginTotal')
                     return false
                 }
 
                 const error = result?.error
                 if (error) {
+                    console.error('Auth:Error', error)
                     setState((prev) => ({
                         ...prev,
                         loading: false,
@@ -205,14 +216,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             ? 'Credenciales incorrectas.'
                             : error.message,
                     }))
+                    console.timeEnd('Auth:LoginTotal')
                     return false
                 }
 
-                // Success — onAuthStateChange will update state
-                // Just clear slowConnection, keep loading true until onAuthStateChange fires
+                // Success
+                console.log('Auth:Success - Login credentials accepted')
+                // Keep loading true until onAuthStateChange fires
                 setState((prev) => ({ ...prev, slowConnection: false }))
+                console.timeEnd('Auth:LoginTotal')
                 return true
-            } catch {
+            } catch (err) {
+                console.error('Auth:Exception', err)
+                if (slowTimer) clearTimeout(slowTimer)
+
                 if (attempt < MAX_RETRIES) {
                     await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
                     continue
@@ -223,6 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     slowConnection: false,
                     error: 'Error de conexión. Verifica tu red e inténtalo de nuevo.',
                 }))
+                console.timeEnd('Auth:LoginTotal')
                 return false
             }
         }
